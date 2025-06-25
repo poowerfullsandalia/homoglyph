@@ -7,6 +7,7 @@ Provides an interactive way to test homoglyph transformations.
 from flask import Flask, render_template, request, jsonify
 from homoglyph_poc import HomoglyphTransformer
 import json
+import unicodedata  # Needed for script name checks
 
 app = Flask(__name__)
 transformer = HomoglyphTransformer()
@@ -18,17 +19,55 @@ def index():
 
 @app.route('/transform', methods=['POST'])
 def transform_text():
-    """Transform text using homoglyphs."""
+    """Transform text using homoglyphs, honoring UI options."""
     data = request.json
     text = data.get('text', '')
     replacement_rate = float(data.get('replacement_rate', 0.3))
     
-    # Transform the text
-    transformed_text, replacement_count = transformer.transform(text, replacement_rate)
-    
-    # Analyze both texts
-    original_analysis = transformer.analyze_text(text)
-    transformed_analysis = transformer.analyze_text(transformed_text)
+    # Option flags from UI
+    subtle_only: bool = data.get('subtle', False)
+    allow_cyrillic: bool = data.get('allow_cyrillic', True)
+    allow_greek: bool = data.get('allow_greek', True)
+    allow_numbers: bool = data.get('allow_numbers', True)
+
+    # Build a transformer with a filtered homoglyph map according to the flags
+    filtered_transformer = HomoglyphTransformer()
+
+    # Create filtered mapping
+    filtered_map = {}
+    for latin, homoglyphs in filtered_transformer.homoglyph_map.items():
+        if latin.isdigit() and not allow_numbers:
+            continue  # Skip digit mappings completely
+
+        allowed_list = []
+        for h in homoglyphs:
+            name = unicodedata.name(h, '')
+
+            # Script filters
+            if (not allow_cyrillic) and 'CYRILLIC' in name:
+                continue
+            if (not allow_greek) and 'GREEK' in name:
+                continue
+
+            # Subtle mode: keep only characters from Cyrillic script (visually closer)
+            if subtle_only and 'CYRILLIC' not in name:
+                continue
+
+            allowed_list.append(h)
+
+        if allowed_list:
+            filtered_map[latin] = allowed_list
+
+    # Replace maps inside the local transformer instance
+    filtered_transformer.homoglyph_map = filtered_map
+    filtered_transformer.reverse_map = {h: l for l, lst in filtered_map.items() for h in lst}
+
+    # Perform transformation with the customized transformer
+    transformed_text, replacement_count = filtered_transformer.transform(text, replacement_rate)
+
+    # Analyze both texts using the same transformer instance (ensures reverse_map matches)
+    original_analysis = filtered_transformer.analyze_text(text)
+    transformed_analysis = filtered_transformer.analyze_text(transformed_text)
     
     # Get character comparison
     char_comparison = []
@@ -212,6 +251,15 @@ if __name__ == '__main__':
             <input type="range" id="replacement-rate" min="0" max="100" value="30" step="5">
         </div>
         
+        <!-- New option controls -->
+        <fieldset style="border:1px solid #ccc; padding:10px; margin-bottom:20px;">
+            <legend><strong>Transformation Options</strong></legend>
+            <label><input type="checkbox" id="subtle-only"> Use visually subtle homoglyphs only (Cyrillic)</label><br>
+            <label><input type="checkbox" id="allow-cyrillic" checked> Enable Cyrillic homoglyphs</label><br>
+            <label><input type="checkbox" id="allow-greek" checked> Enable Greek homoglyphs</label><br>
+            <label><input type="checkbox" id="allow-numbers" checked> Replace numbers</label>
+        </fieldset>
+        
         <div>
             <button onclick="transformText()">Transform Text</button>
             <button onclick="analyzeText()">Analyze for Homoglyphs</button>
@@ -263,10 +311,23 @@ if __name__ == '__main__':
             const text = document.getElementById('input-text').value;
             const rate = document.getElementById('replacement-rate').value / 100;
             
+            // Read option flags
+            const subtle = document.getElementById('subtle-only').checked;
+            const allowCyrillic = document.getElementById('allow-cyrillic').checked;
+            const allowGreek = document.getElementById('allow-greek').checked;
+            const allowNumbers = document.getElementById('allow-numbers').checked;
+            
             fetch('/transform', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: text, replacement_rate: rate})
+                body: JSON.stringify({
+                    text: text,
+                    replacement_rate: rate,
+                    subtle: subtle,
+                    allow_cyrillic: allowCyrillic,
+                    allow_greek: allowGreek,
+                    allow_numbers: allowNumbers
+                })
             })
             .then(response => response.json())
             .then(data => {
