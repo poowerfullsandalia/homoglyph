@@ -12,6 +12,10 @@ import unicodedata  # Needed for script name checks
 app = Flask(__name__)
 transformer = HomoglyphTransformer()
 
+# Constants for Unicode descriptor keywords
+FULLWIDTH_KEY = 'FULLWIDTH'
+MATH_KEY = 'MATHEMATICAL'
+
 @app.route('/')
 def index():
     """Serve the main interface."""
@@ -29,6 +33,8 @@ def transform_text():
     allow_cyrillic: bool = data.get('allow_cyrillic', True)
     allow_greek: bool = data.get('allow_greek', True)
     allow_numbers: bool = data.get('allow_numbers', True)
+    allow_fullwidth: bool = data.get('allow_fullwidth', True)
+    allow_math: bool = data.get('allow_math', True)
 
     # Build a transformer with a filtered homoglyph map according to the flags
     filtered_transformer = HomoglyphTransformer()
@@ -47,6 +53,10 @@ def transform_text():
             if (not allow_cyrillic) and 'CYRILLIC' in name:
                 continue
             if (not allow_greek) and 'GREEK' in name:
+                continue
+            if (not allow_fullwidth) and FULLWIDTH_KEY in name:
+                continue
+            if (not allow_math) and MATH_KEY in name:
                 continue
 
             # Subtle mode: keep only characters from Cyrillic script (visually closer)
@@ -257,7 +267,9 @@ if __name__ == '__main__':
             <label><input type="checkbox" id="subtle-only"> Use visually subtle homoglyphs only (Cyrillic)</label><br>
             <label><input type="checkbox" id="allow-cyrillic" checked> Enable Cyrillic homoglyphs</label><br>
             <label><input type="checkbox" id="allow-greek" checked> Enable Greek homoglyphs</label><br>
-            <label><input type="checkbox" id="allow-numbers" checked> Replace numbers</label>
+            <label><input type="checkbox" id="allow-numbers" checked> Replace numbers</label><br>
+            <label><input type="checkbox" id="allow-fullwidth" checked> Enable Fullwidth homoglyphs</label><br>
+            <label><input type="checkbox" id="allow-math" checked> Enable Mathematical bold/italic homoglyphs</label>
         </fieldset>
         
         <div>
@@ -316,6 +328,8 @@ if __name__ == '__main__':
             const allowCyrillic = document.getElementById('allow-cyrillic').checked;
             const allowGreek = document.getElementById('allow-greek').checked;
             const allowNumbers = document.getElementById('allow-numbers').checked;
+            const allowFullwidth = document.getElementById('allow-fullwidth').checked;
+            const allowMath = document.getElementById('allow-math').checked;
             
             fetch('/transform', {
                 method: 'POST',
@@ -326,7 +340,9 @@ if __name__ == '__main__':
                     subtle: subtle,
                     allow_cyrillic: allowCyrillic,
                     allow_greek: allowGreek,
-                    allow_numbers: allowNumbers
+                    allow_numbers: allowNumbers,
+                    allow_fullwidth: allowFullwidth,
+                    allow_math: allowMath
                 })
             })
             .then(response => response.json())
