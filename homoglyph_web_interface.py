@@ -105,8 +105,12 @@ def transform_text():
         transformed_text, replacement_count = transformer.transform(text, replacement_rate)
 
     # Analyze both texts using the same transformer instance (ensures reverse_map matches)
-    original_analysis = transformer.analyze_text(text)
-    transformed_analysis = transformer.analyze_text(transformed_text)
+    if hasattr(transformer, 'analyze_text'):
+        original_analysis = transformer.analyze_text(text)
+        transformed_analysis = transformer.analyze_text(transformed_text)
+    else:
+        original_analysis = base_transformer.analyze_text(text)
+        transformed_analysis = base_transformer.analyze_text(transformed_text)
     
     # Get character comparison
     char_comparison = []
