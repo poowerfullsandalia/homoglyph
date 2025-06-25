@@ -16,6 +16,13 @@ transformer = HomoglyphTransformer()
 FULLWIDTH_KEY = 'FULLWIDTH'
 MATH_KEY = 'MATHEMATICAL'
 
+# Identify character class helpers (wrapper functions keep functions short)
+def _is_upper(ch: str) -> bool:
+    return 'A' <= ch <= 'Z'
+
+def _is_lower(ch: str) -> bool:
+    return 'a' <= ch <= 'z'
+
 @app.route('/')
 def index():
     """Serve the main interface."""
@@ -35,6 +42,8 @@ def transform_text():
     allow_numbers: bool = data.get('allow_numbers', True)
     allow_fullwidth: bool = data.get('allow_fullwidth', True)
     allow_math: bool = data.get('allow_math', True)
+    replace_upper: bool = data.get('replace_uppercase', True)
+    replace_lower: bool = data.get('replace_lowercase', True)
 
     # Build a transformer with a filtered homoglyph map according to the flags
     filtered_transformer = HomoglyphTransformer()
@@ -44,6 +53,12 @@ def transform_text():
     for latin, homoglyphs in filtered_transformer.homoglyph_map.items():
         if latin.isdigit() and not allow_numbers:
             continue  # Skip digit mappings completely
+
+        # Skip based on char case category flags
+        if _is_upper(latin) and not replace_upper:
+            continue
+        if _is_lower(latin) and not replace_lower:
+            continue
 
         allowed_list = []
         for h in homoglyphs:
@@ -269,7 +284,9 @@ if __name__ == '__main__':
             <label><input type="checkbox" id="allow-greek" checked> Enable Greek homoglyphs</label><br>
             <label><input type="checkbox" id="allow-numbers" checked> Replace numbers</label><br>
             <label><input type="checkbox" id="allow-fullwidth" checked> Enable Fullwidth homoglyphs</label><br>
-            <label><input type="checkbox" id="allow-math" checked> Enable Mathematical bold/italic homoglyphs</label>
+            <label><input type="checkbox" id="allow-math" checked> Enable Mathematical bold/italic homoglyphs</label><br>
+            <label><input type="checkbox" id="replace-uppercase" checked> Replace UPPERCASE letters</label><br>
+            <label><input type="checkbox" id="replace-lowercase" checked> Replace lowercase letters</label>
         </fieldset>
         
         <div>
@@ -330,6 +347,8 @@ if __name__ == '__main__':
             const allowNumbers = document.getElementById('allow-numbers').checked;
             const allowFullwidth = document.getElementById('allow-fullwidth').checked;
             const allowMath = document.getElementById('allow-math').checked;
+            const replaceUpper = document.getElementById('replace-uppercase').checked;
+            const replaceLower = document.getElementById('replace-lowercase').checked;
             
             fetch('/transform', {
                 method: 'POST',
@@ -342,7 +361,9 @@ if __name__ == '__main__':
                     allow_greek: allowGreek,
                     allow_numbers: allowNumbers,
                     allow_fullwidth: allowFullwidth,
-                    allow_math: allowMath
+                    allow_math: allowMath,
+                    replace_uppercase: replaceUpper,
+                    replace_lowercase: replaceLower
                 })
             })
             .then(response => response.json())
